@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <title>菜品管理 · 外卖成本系统</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+</head>
+<body>
+<nav class="navbar navbar-expand-lg navbar-dark bg-primary">
+  <div class="container">
+    <a class="navbar-brand" href="index.html">干饭人外卖成本系统</a>
+    <div>
+      <a class="btn btn-outline-light me-2" href="purchases.html">采购</a>
+      <a class="btn btn-outline-light me-2" href="dishes.html">菜品</a>
+      <a class="btn btn-outline-light me-2" href="settings.html">售价设置</a>
+      <a class="btn btn-outline-light" href="profit.html">利润计算器</a>
+      <a class="btn btn-outline-light" href="sales.html">销售记录</a>
+    </div>
+  </div>
+</nav>
+
+<main class="container py-4">
+  <div class="row">
+
+    <!-- 左边：菜品管理表单 -->
+    <div class="col-md-4">
+      <h3>菜品管理</h3>
+      <form id="dishForm">
+        <input type="hidden" id="currentDishId">
+
+        <div class="mb-2">
+          <label class="form-label">菜品名称</label>
+          <input id="d_name" class="form-control" required>
+        </div>
+
+        <h6>配料（每份）</h6>
+        <div id="ingredientsBlock"></div>
+
+        <button id="addIngredientRow" type="button" class="btn btn-outline-secondary btn-sm mt-2">添加配料</button>
+
+        <div class="mt-3">
+          <button class="btn btn-success" type="submit">保存菜品</button>
+        </div>
+      </form>
+
+      <h6 class="mt-4">配料参考列表</h6>
+      <ul id="ingredientList" class="list-group"></ul>
+    </div>
+
+    <!-- 右边：菜品列表 -->
+    <div class="col-md-8">
+      <h5 class="mt-3">菜品参考列表</h5>
+      <div id="dishesList"></div>
+    </div>
+
+  </div>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="dishes.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+
+</body>
+</html>

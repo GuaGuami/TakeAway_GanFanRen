@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <title>销售记录 · 外卖成本系统</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+</head>
+<body>
+<nav class="navbar navbar-expand-lg navbar-dark bg-primary">
+  <div class="container">
+    <a class="navbar-brand" href="index.html">干饭人外卖成本系统</a>
+    <div>
+      <a class="btn btn-outline-light me-2" href="purchases.html">采购</a>
+      <a class="btn btn-outline-light me-2" href="dishes.html">菜品</a>
+      <a class="btn btn-outline-light me-2" href="settings.html">售价设置</a>
+      <a class="btn btn-outline-light me-2" href="profit.html">利润计算器</a>
+      <a class="btn btn-outline-light" href="sales.html">销售记录</a>
+      
+    </div>
+  </div>
+</nav>
+
+<main class="container py-4">
+  <h3>录入销售记录</h3>
+
+  <div class="row">
+    <div class="col-md-4">
+      <div class="mb-3">
+        <label class="form-label">选择售价情景</label>
+        <select id="selectScenario" class="form-select"></select>
+      </div>
+      <div class="mb-3">
+        <label class="form-label">售价类型</label>
+        <select id="selectMenuType" class="form-select">
+          <option value="standard">标准</option>
+          <option value="plus">Plus</option>
+        </select>
+      </div>
+      <div class="mb-3">
+        <label class="form-label">选择菜品</label>
+        <select id="selectDish" class="form-select"></select>
+      </div>
+      <div class="mb-3">
+        <label class="form-label">销售数量</label>
+        <input type="number" min="1" step="1" id="quantity" class="form-control">
+      </div>
+      <div>
+        <button id="addSaleBtn" class="btn btn-primary">添加销售</button>
+      </div>
+    </div>
+
+    <div class="col-md-8">
+      <h5>销售记录列表</h5>
+      <table class="table table-sm table-bordered">
+        <thead>
+          <tr>
+            <th>日期</th>
+            <th>情景</th>
+            <th>菜品</th>
+            <th>类型</th>
+            <th>数量</th>
+            <th>单价 (€)</th>
+            <th>成本 (€)</th>
+            <th>利润 (€)</th>
+          </tr>
+        </thead>
+        <tbody id="salesList">
+          <tr><td colspan="8">暂无销售记录</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <h3 class="mt-5">销售数据可视化</h3>
+<div class="row mb-4">
+  <div class="col-4">
+    <h5>每日利润趋势</h5>
+    <canvas id="dailyProfitChart" style="width: 100%; height: 200px;"></canvas>
+  </div>
+  <div class="col-4">
+    <h5>菜品利润分布</h5>
+    <canvas id="dishProfitChart" style="width: 100%; height: 200px;"></canvas>
+  </div>
+  <div class="col-4">
+    <h5>菜品利润率分布</h5>
+    <canvas id="dishProfitRateChart" style="width: 100%; height: 200px;"></canvas>
+  </div>
+</div>
+
+</main>
+
+<!-- JS -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels"></script>
+
+
+<!-- 自定义 JS -->
+<script src="sales_visualisation.js"></script>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>
