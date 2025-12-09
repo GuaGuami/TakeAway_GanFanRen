@@ -2,8 +2,6 @@ const SUPABASE_URL = "https://cmfcqwviaiyrrfxdmpvq.supabase.co";
 const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNtZmNxd3ZpYWl5cnJmeGRtcHZxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjUyNTU2NTAsImV4cCI6MjA4MDgzMTY1MH0.gBs7ZGpEPNOrbxrMbs52CWkXZuNvVWWlEfF1tqlxSTs"; // 替换成你自己的
 const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
-
-
 // ------------------------------
 // 工具函数
 // ------------------------------
@@ -27,6 +25,7 @@ function generateId(prefix='id') {
 document.addEventListener('DOMContentLoaded', () => {
   setupIngredientRow();
   renderDishesList();
+  renderIngredientReference();
   document.getElementById('addIngredientRow').addEventListener('click', setupIngredientRow);
   document.getElementById('dishForm').addEventListener('submit', submitDish);
 });
@@ -55,12 +54,9 @@ async function submitDish(e) {
 
   const id = document.getElementById('currentDishId').value;
   const name = document.getElementById('d_name').value.trim();
-
   if (!name) return alert('请填写菜品名称');
 
-  // 采集配料 —— 必须转换成数组！
   const rows = Array.from(document.querySelectorAll('.ingredient-row'));
-
   const ingredients = rows
     .map(r => {
       const ing = r.querySelector('.ing-name').value.trim();
@@ -68,39 +64,30 @@ async function submitDish(e) {
       return ing && wt > 0 ? { ingredient: ing, weightKg: wt } : null;
     })
     .filter(Boolean);
-
   if (!ingredients.length) return alert('请至少添加一个配料');
 
   let dish_id = id;
 
-  // --- 编辑 ---
   if (id) {
     await supabaseClient.from("dishes").update({ name }).eq("id", id);
     await supabaseClient.from("dish_ingredients").delete().eq("dish_id", id);
-
-  // --- 新增 ---
   } else {
     const { data: dishData, error } = await supabaseClient
       .from('dishes')
       .insert({ name })
       .select('id')
       .single();
-
     if (error) return console.error(error);
-
     dish_id = dishData.id;
   }
 
-  // 插入配料
   for (let ing of ingredients) {
     let ingredient_id;
-
     const { data: exist } = await supabaseClient
       .from('ingredients')
       .select('id')
       .eq('name', ing.ingredient)
       .limit(1);
-
     if (exist.length) {
       ingredient_id = exist[0].id;
     } else {
@@ -121,7 +108,6 @@ async function submitDish(e) {
 
   alert(id ? "菜品已更新" : "菜品已保存");
 
-  // 重置
   document.getElementById('dishForm').reset();
   document.getElementById('currentDishId').value = "";
   document.getElementById('ingredientsBlock').innerHTML = '';
@@ -129,25 +115,36 @@ async function submitDish(e) {
   renderDishesList();
 }
 
-
 // ------------------------------
-// 获取最新采购记录
+// 获取按 ingredient_id 的加权平均价格
 // ------------------------------
-async function getLatestPurchaseMap() {
+async function getWeightedPriceMap() {
   const { data, error } = await supabaseClient
     .from('purchase_records')
-    .select('ingredient_id, price_per_kg, date')
-    .order('date', { ascending: false });
+    .select('ingredient_id, quantity_kg, price_per_kg')
+    .order('date', { ascending: true }); // 可以按日期升序，但不影响计算
+
   if (error) return {};
-  const map = {};
+
+  const map = {}; // ingredient_id -> avgPrice
+
   data.forEach(p => {
-    if (!map[p.ingredient_id]) map[p.ingredient_id] = p;
+    const ingId = p.ingredient_id;
+    const qty = Number(p.quantity_kg);
+    const price = Number(p.price_per_kg);
+    if (!map[ingId]) {
+      map[ingId] = { totalQty: 0, totalCost: 0, avgPrice: 0 };
+    }
+    map[ingId].totalQty += qty;
+    map[ingId].totalCost += qty * price;
+    map[ingId].avgPrice = map[ingId].totalCost / map[ingId].totalQty;
   });
-  return map; // ingredient_id -> latest purchase
+
+  return map; // ingredient_id -> { totalQty, totalCost, avgPrice }
 }
 
 // ------------------------------
-// 渲染菜品列表
+// 渲染菜品列表（成本按加权平均）
 // ------------------------------
 async function renderDishesList() {
   const { data, error } = await supabaseClient
@@ -164,7 +161,7 @@ async function renderDishesList() {
 
   if (error) return console.error(error);
 
-  const latestPurchases = await getLatestPurchaseMap();
+  const weightedPrices = await getWeightedPriceMap();
 
   const wrapper = document.getElementById('dishesList');
   if (!data.length) {
@@ -188,15 +185,15 @@ async function renderDishesList() {
           <tr>
             <th>食材</th>
             <th>用量 (kg/份)</th>
-            <th>单价 (€ / kg)</th>
+            <th>加权单价 (€ / kg)</th>
             <th>成本 (€)</th>
           </tr>
         </thead>
         <tbody>`;
 
     d.dish_ingredients.forEach(i => {
-      const purchase = latestPurchases[i.ingredient_id];
-      const unitPrice = purchase ? Number(purchase.price_per_kg) : 0;
+      const wp = weightedPrices[i.ingredient_id];
+      const unitPrice = wp ? wp.avgPrice : 0;
       const cost = unitPrice * i.weight_kg;
       totalCost += cost;
 
@@ -215,6 +212,7 @@ async function renderDishesList() {
   html += '</div>';
   wrapper.innerHTML = html;
 }
+
 
 // ------------------------------
 // 删除菜品
@@ -237,7 +235,6 @@ async function editDish(id) {
       name,
       dish_ingredients (
         weight_kg,
-        ingredient_id,
         ingredients (name)
       )
     `)
@@ -245,9 +242,8 @@ async function editDish(id) {
     .single();
   if (error) return console.error(error);
 
-  // 填入表单
   document.getElementById('d_name').value = data.name;
-  document.getElementById('currentDishId').value = id; // 保存编辑 ID
+  document.getElementById('currentDishId').value = id;
 
   document.getElementById('ingredientsBlock').innerHTML = '';
   data.dish_ingredients.forEach(i => {
@@ -255,14 +251,13 @@ async function editDish(id) {
   });
 }
 
-
 // ------------------------------
-// 渲染配料参考列表（显示所有字段）
+// 渲染配料参考列表
 // ------------------------------
 async function renderIngredientReference() {
   const { data, error } = await supabaseClient
     .from('ingredients')
-    .select('*') // 获取所有字段
+    .select('*')
     .order('name', { ascending: true });
 
   const listContainer = document.getElementById('ingredientList');
@@ -276,12 +271,10 @@ async function renderIngredientReference() {
     return;
   }
 
-  // 构建表格
   let html = `
     <table class="table table-sm table-bordered mb-0">
       <thead class="table-light">
         <tr>
-          
           <th>名称</th>
           <th>分类</th>
           <th>操作</th>
@@ -293,7 +286,6 @@ async function renderIngredientReference() {
   data.forEach(ing => {
     html += `
       <tr>
-        
         <td>${escapeHtml(ing.name)}</td>
         <td>${escapeHtml(ing.category)}</td>
         <td>
@@ -306,7 +298,6 @@ async function renderIngredientReference() {
   html += `</tbody></table>`;
   listContainer.innerHTML = html;
 
-  // 给每个添加按钮绑定事件
   const buttons = listContainer.querySelectorAll('button');
   buttons.forEach((btn, index) => {
     btn.addEventListener('click', () => {
@@ -314,15 +305,3 @@ async function renderIngredientReference() {
     });
   });
 }
-
-// ------------------------------
-// 页面初始化调用
-// ------------------------------
-document.addEventListener('DOMContentLoaded', () => {
-  //setupIngredientRow();
-  renderDishesList();
-  renderIngredientReference(); // 新增：配料参考列表显示所有字段
-  document.getElementById('addIngredientRow').addEventListener('click', setupIngredientRow);
-  document.getElementById('dishForm').addEventListener('submit', submitDish);
-});
-

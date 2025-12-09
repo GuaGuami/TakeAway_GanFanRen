@@ -24,29 +24,24 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     const price = menuType === "standard" ? scenario.standard_price : scenario.plus_price;
 
-    const latestPurchases = await getLatestPurchaseMap();
+    // 获取加权平均价格
+    const weightedPrices = await getWeightedPriceMap();
     let totalCost = 0;
 
     // 构建配料明细表格
     let ingredientRows = '';
     dish.dish_ingredients.forEach(i => {
-      const purchase = latestPurchases[i.ingredient_id];
-      const unitPrice = purchase ? Number(purchase.price_per_kg) : 0;
+      const wp = weightedPrices[i.ingredient_id];
+      const unitPrice = wp ? wp.avgPrice : 0;
       const cost = unitPrice * i.weight_kg;
       totalCost += cost;
 
-      // 最新采购时间和超市
-      const dateStr = purchase?.date ? new Date(purchase.date).toLocaleDateString() : '-';
-      const supermarket = purchase?.supermarket || '-';
-
       ingredientRows += `
-        <tr style="border:none;">
-          <td style="border:none;">${escapeHtml(i.ingredients.name)}</td>
-          <td style="border:none;">${i.weight_kg} kg</td>
-          <td style="border:none;">€${unitPrice.toFixed(4)}</td>
-          <td style="border:none;">€${cost.toFixed(4)}</td>
-          <td style="border:none;">${dateStr}</td>
-          <td style="border:none;">${escapeHtml(supermarket)}</td>
+        <tr>
+          <td>${escapeHtml(i.ingredients.name)}</td>
+          <td>${i.weight_kg} kg</td>
+          <td>€${unitPrice.toFixed(4)}</td>
+          <td>€${cost.toFixed(4)}</td>
         </tr>
       `;
     });
@@ -61,15 +56,13 @@ document.addEventListener("DOMContentLoaded", async () => {
       <p><strong>利润：</strong>€${profit.toFixed(2)} （${profitPct.toFixed(1)}%）</p>
       <hr>
       <h6>明细</h6>
-      <table style="border:none; width:100%;">
+      <table style="width:100%;">
         <thead>
-          <tr style="border:none;">
-            <th style="border:none;">食材</th>
-            <th style="border:none;">用量</th>
-            <th style="border:none;">单价</th>
-            <th style="border:none;">成本</th>
-            <th style="border:none;">采购时间</th>
-            <th style="border:none;">超市</th>
+          <tr>
+            <th>食材</th>
+            <th>用量</th>
+            <th>加权单价</th>
+            <th>成本</th>
           </tr>
         </thead>
         <tbody>
@@ -81,7 +74,34 @@ document.addEventListener("DOMContentLoaded", async () => {
 });
 
 // ------------------------------
-// 加载菜品下拉
+// 获取加权平均价格
+// ------------------------------
+async function getWeightedPriceMap() {
+  const { data, error } = await supabaseClient
+    .from('purchase_records')
+    .select('ingredient_id, quantity_kg, price_per_kg')
+    .order('date', { ascending: true });
+
+  if (error) return {};
+
+  const map = {};
+  data.forEach(p => {
+    const ingId = p.ingredient_id;
+    const qty = Number(p.quantity_kg);
+    const price = Number(p.price_per_kg);
+    if (!map[ingId]) {
+      map[ingId] = { totalQty: 0, totalCost: 0, avgPrice: 0 };
+    }
+    map[ingId].totalQty += qty;
+    map[ingId].totalCost += qty * price;
+    map[ingId].avgPrice = map[ingId].totalCost / map[ingId].totalQty;
+  });
+
+  return map; // ingredient_id -> { totalQty, totalCost, avgPrice }
+}
+
+// ------------------------------
+// 其他函数保持不变
 // ------------------------------
 async function populateDishesSelect() {
   const sel = document.getElementById("selectDish");
@@ -98,9 +118,6 @@ async function populateDishesSelect() {
     data.map(d => `<option value="${d.id}">${escapeHtml(d.name)}</option>`).join('');
 }
 
-// ------------------------------
-// 加载情景下拉
-// ------------------------------
 async function populateScenarioSelect() {
   const sel = document.getElementById("selectScenario");
   const { data, error } = await supabaseClient
@@ -116,9 +133,6 @@ async function populateScenarioSelect() {
     data.map(s => `<option value="${s.id}">${escapeHtml(s.scenario)}</option>`).join('');
 }
 
-// ------------------------------
-// 加载单个菜品
-// ------------------------------
 async function loadDish(id) {
   const { data } = await supabaseClient
     .from("dishes")
@@ -136,9 +150,6 @@ async function loadDish(id) {
   return data;
 }
 
-// ------------------------------
-// 加载单个情景
-// ------------------------------
 async function loadScenario(id) {
   const { data } = await supabaseClient
     .from("settings")
@@ -148,28 +159,6 @@ async function loadScenario(id) {
   return data;
 }
 
-// ------------------------------
-// 获取最新采购记录
-// ------------------------------
-async function getLatestPurchaseMap() {
-  const { data } = await supabaseClient
-    .from('purchase_records')
-    .select('ingredient_id, price_per_kg, date, supermarket')
-    .order('date', { ascending: false });
-
-  const map = {};
-  data.forEach(p => {
-    // 如果当前 ingredient_id 还没记录，或者已有记录的 supermarket 为空且当前有值
-    if (!map[p.ingredient_id] || (!map[p.ingredient_id].supermarket && p.supermarket)) {
-      map[p.ingredient_id] = p;
-    }
-  });
-  return map;
-}
-
-// ------------------------------
-// HTML 转义
-// ------------------------------
 function escapeHtml(str) {
   if (!str) return '';
   return String(str)
